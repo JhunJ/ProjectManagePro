@@ -1,0 +1,208 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum ProjectVersionType {
+  PLAN
+  ACTUAL
+}
+
+enum HolidayScope {
+  PROJECT
+  COMPANY
+}
+
+enum DependencyType {
+  FS
+  SS
+  FF
+  SF
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+model User {
+  id                 String                 @id @default(cuid())
+  username           String                 @unique
+  passwordHash       String
+  role               UserRole               @default(USER)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  projects           Project[]              @relation("UserProjects")
+  projectFavorites   UserProjectFavorite[]
+}
+
+model UserProjectFavorite {
+  id         String   @id @default(cuid())
+  userId     String
+  projectId  String
+  createdAt  DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+  @@index([userId])
+  @@index([projectId])
+}
+
+model Project {
+  id                  String                 @id @default(cuid())
+  name                String
+  description         String?
+  startDate           DateTime
+  endDate             DateTime?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  tasks               Task[]
+  dependencies        Dependency[]
+  workingCalendar     WorkingCalendar?
+  versions            ProjectVersion[]
+  companies           Company[]
+  holidays            Holiday[]
+  users               User[]                 @relation("UserProjects")
+  userFavorites        UserProjectFavorite[]
+
+  @@index([createdAt])
+}
+
+model Task {
+  id             String      @id @default(cuid())
+  projectId      String
+  parentTaskId   String?
+  /// 같은 목록 행에 이어 그리는 구간(휴지 후 재개). null이면 루트 막대(행 기준 작업).
+  timelineHeadTaskId String?
+  name           String
+  categoryMajor  String?
+  categoryMiddle1 String?
+  categoryMiddle2 String?
+  categorySmall  String?
+  activityName   String?
+  siteMainCategory String?
+  siteDisplayText String?
+  companyId      String?
+  categoryMiddle String?
+  categoryMinor  String?
+  wbsCode        String?
+  startDate      DateTime
+  endDate        DateTime
+  durationDays   Int
+  progress       Int         @default(0)
+  assignee       String?
+  color          String      @default("#3B82F6")
+  isMilestone    Boolean     @default(false)
+  notes          String?
+  sortOrder      Int
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  project        Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  company        Company?    @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  parentTask     Task?       @relation("TaskHierarchy", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  children       Task[]      @relation("TaskHierarchy")
+  timelineHead   Task?       @relation("TaskTimelineSegments", fields: [timelineHeadTaskId], references: [id], onDelete: Cascade)
+  timelineSegments Task[]    @relation("TaskTimelineSegments")
+  predecessorDeps Dependency[] @relation("PredecessorTask")
+  successorDeps   Dependency[] @relation("SuccessorTask")
+
+  @@index([projectId, sortOrder])
+  @@index([projectId, parentTaskId])
+  @@index([projectId, timelineHeadTaskId])
+  @@index([projectId, companyId])
+}
+
+model Dependency {
+  id                 String         @id @default(cuid())
+  projectId          String
+  predecessorTaskId  String
+  successorTaskId    String
+  type               DependencyType @default(FS)
+  lagDays            Int            @default(0)
+  drivesSchedule     Boolean        @default(true)
+  createdAt          DateTime       @default(now())
+
+  project            Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  predecessorTask    Task           @relation("PredecessorTask", fields: [predecessorTaskId], references: [id], onDelete: Cascade)
+  successorTask      Task           @relation("SuccessorTask", fields: [successorTaskId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, predecessorTaskId])
+  @@index([projectId, successorTaskId])
+  @@unique([predecessorTaskId, successorTaskId, type])
+}
+
+model WorkingCalendar {
+  id         String   @id @default(cuid())
+  projectId  String   @unique
+  workMon    Boolean  @default(true)
+  workTue    Boolean  @default(true)
+  workWed    Boolean  @default(true)
+  workThu    Boolean  @default(true)
+  workFri    Boolean  @default(true)
+  workSat    Boolean  @default(false)
+  workSun    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model ProjectVersion {
+  id              String   @id @default(cuid())
+  projectId       String
+  versionType     ProjectVersionType @default(PLAN)
+  versionNo       Int
+  title           String
+  description     String?
+  createdBy       String
+  createdAt       DateTime @default(now())
+  snapshotJson    String
+  taskCount       Int
+  dependencyCount Int
+
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, versionType, versionNo])
+  @@index([projectId, createdAt])
+}
+
+model Company {
+  id         String    @id @default(cuid())
+  projectId  String
+  name       String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks      Task[]
+  holidays   Holiday[]
+
+  @@unique([projectId, name])
+  @@index([projectId, createdAt])
+}
+
+model Holiday {
+  id         String      @id @default(cuid())
+  projectId  String
+  scope      HolidayScope
+  companyId  String?
+  name       String?
+  startDate  DateTime
+  endDate    DateTime
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  company    Company?    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, scope, startDate])
+  @@index([companyId, startDate])
+}

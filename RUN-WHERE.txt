@@ -1,0 +1,44 @@
+=== Where to run each BAT ===
+
+*** SERVER DEPLOY (0_CopyForTransfer.bat): After copying the folder to the server, you MUST run 1_Setup.bat on the server. The copied folder has no .next (no build); without 1_Setup.bat, /login and other routes will 404. ***
+
+[LOCAL PC]
+  1_Setup.bat         - First-time setup. When asked "Is this PC the SERVER?", choose N. Run once.
+  2_Start.bat         - Start the app (dev or production).
+  Local-DB-Push.bat   - Send local DB to server. Then on server run Server-DB-Import.bat.
+  Local-DB-Pull.bat   - Get DB from server into local.
+  0_CopyForTransfer.bat - Copy project to another PC (excludes .git, node_modules, .next, etc.). Optional.
+
+[SERVER PC]
+  1_Setup.bat         - First-time setup. When asked "Is this PC the SERVER?", choose Y and enter PostgreSQL password. .env is created automatically. Run once.
+  2_Start.bat         - Start the app.
+  Server-DB-Import.bat - Restore DB from dump (after someone ran Local-DB-Push on their PC).
+
+=== Login (all environments) ===
+  - Login page URL: http://localhost:3000/login (or open / or /projects; you will be redirected to /login).
+  - First login: admin / admin123 (or set ADMIN_INITIAL_PASSWORD before running db:seed).
+  - Only accounts created by an admin (Settings > User management) can log in. No self-registration.
+  - If /login shows 404: run 1_Setup.bat again so the build is fresh (npm run build), then 2_Start.bat.
+
+=== Login / Settings 404 checklist ===
+  1. On server: Did you run 1_Setup.bat after pasting the project? (Required; creates .next and routes.)
+  2. On server: If you only run 2_Start.bat without a prior 1_Setup.bat, run 1_Setup.bat once, then 2_Start.bat.
+  3. Settings button: In the projects list or project detail header, use the gear icon (설정). If the header is narrow, buttons wrap to the next line.
+
+=== What 1_Setup.bat / 2_Start.bat change ===
+  1_Setup.bat: Creates/overwrites .env (DB URL). Installs node_modules. Runs prisma generate, db:push, db:seed. Builds the app (.next). Does NOT change any source code; login page is in src/app/login/.
+  2_Start.bat: Only starts the server (npm run dev or npm run start). Does not change any files or settings.
+
+Server IP is in Local-DB-Push.bat and Local-DB-Pull.bat (edit SERVER_IP= at top if needed).
+
+Passwords (edit in each BAT or use sync-db.env to override):
+  - LOCAL PC: PostgreSQL password 1234 (.env and Local-DB-Push/Pull use 1234 for local DB).
+  - SERVER PC: PostgreSQL password postgres (.env and Server-DB-Import use postgres).
+  - Local-DB-Pull uses SERVER password to dump from server, then LOCAL password to restore locally.
+
+*** .env: Do NOT copy server .env to local (or vice versa) ***
+  - Local .env must use password 1234. Server .env must use password postgres.
+  - If you paste server .env on your PC, the app will try postgres and local DB will fail.
+  - npm run dev on local always forces 1234 for the running process; keep .env as 1234 for other commands (db:push, etc.).
+
+See SERVER-SETUP.md for server-first installation steps.
